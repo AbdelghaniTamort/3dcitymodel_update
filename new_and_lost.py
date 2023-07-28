@@ -196,8 +196,73 @@ def save_ahn4_ahn3_pc_without_new_and_lost(ahn3_rest, ahn4_rest, ahn3_pc, ahn4_p
     return ahn3_changed.write(ahn3_filtered), ahn4_changed.write(ahn4_filtered)
 
 
+def save_new_lost_pc(new_shp, lost_shp, ahn3_pc, ahn4_pc, new_pc, lost_pc):
+    # reading the shapefiles
+    shapefile1 = gpd.read_file(new_shp)
+    shapefile2 = gpd.read_file(lost_shp)
+
+    # setting the crs
+    shapefile1.crs = "EPSG:28992"
+    shapefile2.crs = "EPSG:28992"
+
+    # read the pointclouds using laspy
+    las_file1 = laspy.read(ahn3_pc)
+    las_file2 = laspy.read(ahn4_pc)
+
+    # create a GeoDataFrame from the x,y coordinates of the point clouds
+    points_ahn3 = gpd.GeoDataFrame(geometry=gpd.points_from_xy(
+        las_file1.x, las_file1.y), crs="EPSG:28992")
+    points_ahn4 = gpd.GeoDataFrame(geometry=gpd.points_from_xy(
+        las_file2.x, las_file2.y), crs="EPSG:28992")
+
+    # clip the point cloud to the polygon
+    clipped_points_new = points_ahn4.clip(shapefile1)
+    clipped_points_lost = points_ahn3.clip(shapefile2)
+
+    # create a new laspy file objects
+    lost = laspy.create(point_format=las_file1.header.point_format,
+                        file_version=las_file1.header.version)
+    new = laspy.create(
+        point_format=las_file2.header.point_format, file_version=las_file2.header.version)
+
+    # setting the same scalar fields for the new las files
+    # for new
+    new.x = clipped_points_new.geometry.x.values
+    new.y = clipped_points_new.geometry.y.values
+    new.z = las_file2.z[clipped_points_new.index]
+    new.intensity = las_file2.intensity[clipped_points_new.index]
+    new.classification = las_file2.classification[clipped_points_new.index]
+    new.gps_time = las_file2.gps_time[clipped_points_new.index]
+    new.user_data = las_file2.user_data[clipped_points_new.index]
+    new.return_number = las_file2.return_number[clipped_points_new.index]
+    new.number_of_returns = las_file2.number_of_returns[clipped_points_new.index]
+    new.edge_of_flight_line = las_file2.edge_of_flight_line[clipped_points_new.index]
+    new.red = las_file2.red[clipped_points_new.index]
+    new.green = las_file2.green[clipped_points_new.index]
+    new.blue = las_file2.blue[clipped_points_new.index]
+    # for lost
+    lost.x = clipped_points_lost.geometry.x.values
+    lost.y = clipped_points_lost.geometry.y.values
+    lost.z = las_file1.z[clipped_points_lost.index]
+    lost.intensity = las_file1.intensity[clipped_points_lost.index]
+    lost.classification = las_file1.classification[clipped_points_lost.index]
+    lost.gps_time = las_file1.gps_time[clipped_points_lost.index]
+    lost.user_data = las_file1.user_data[clipped_points_lost.index]
+    lost.return_number = las_file1.return_number[clipped_points_lost.index]
+    lost.number_of_returns = las_file1.number_of_returns[clipped_points_lost.index]
+    lost.edge_of_flight_line = las_file1.edge_of_flight_line[clipped_points_lost.index]
+    lost.red = las_file1.red[clipped_points_lost.index]
+    lost.green = las_file1.green[clipped_points_lost.index]
+    lost.blue = las_file1.blue[clipped_points_lost.index]
+
+    return new.write(new_pc), lost.write(lost_pc)
+
+
+# applying the functions 
 save_intersecting_polygons("inputs/footprints/ahn4.shp", "inputs/footprints/model.shp", "inputs/pointcloud/AHN4_buildings_clip.laz", "inputs/pointcloud/AHN3_buildings_clip.laz", "outputs/facets/ahn3_temp.shp", "outputs/facets/ahn4_temp.shp",
                            "outputs/facets/new.shp", "outputs/facets/lost.shp", "outputs/facets/ahn3_rest.shp", "outputs/facets/ahn4_rest.shp")
 save_ahn4_ahn3_pc_without_new_and_lost("outputs/facets/ahn3_rest.shp", "outputs/facets/ahn4_rest.shp", "inputs/pointcloud/AHN3_buildings_clip.laz",
                                     "inputs/pointcloud/AHN4_buildings_clip.laz", "outputs/pointcloud/ahn3_no_new_no_lost.laz", "outputs/pointcloud/ahn4_no_new_no_lost.laz")
+save_new_lost_pc("outputs/facets/new.shp", "outputs/facets/lost.shp", "inputs/pointcloud/AHN3_buildings_clip.laz",
+                 "inputs/pointcloud/AHN4_buildings_clip.laz", "outputs/pointcloud/new.laz", "outputs/pointcloud/lost.laz")
 
