@@ -133,7 +133,7 @@ def save_intersecting_polygons(ahn4_shp, ahn3_shp, ahn4_pc, ahn3_pc, ahn3_tempo,
     return new_polygons.to_file(new), lost_polygons.to_file(lost), rest_ahn3_polygons.to_file(ahn3_rest), rest_ahn4_polygons.to_file(ahn4_rest), ahn3_temp.to_file(ahn3_tempo), ahn4_temp.to_file(ahn4_tempo)
 
 
-def save_ahn4_ahn3_without_new_and_lost(ahn3_rest, ahn4_rest, ahn3_pc, ahn4_pc, ahn3_filtered, ahn4_filtered):
+def save_ahn4_ahn3_pc_without_new_and_lost(ahn3_rest, ahn4_rest, ahn3_pc, ahn4_pc, ahn3_filtered, ahn4_filtered):
 
     # reading the shapefiles
     shapefile1 = gpd.read_file(ahn3_rest)
@@ -198,6 +198,6 @@ def save_ahn4_ahn3_without_new_and_lost(ahn3_rest, ahn4_rest, ahn3_pc, ahn4_pc, 
 
 save_intersecting_polygons("inputs/footprints/ahn4.shp", "inputs/footprints/model.shp", "inputs/pointcloud/AHN4_buildings_clip.laz", "inputs/pointcloud/AHN3_buildings_clip.laz", "outputs/facets/ahn3_temp.shp", "outputs/facets/ahn4_temp.shp",
                            "outputs/facets/new.shp", "outputs/facets/lost.shp", "outputs/facets/ahn3_rest.shp", "outputs/facets/ahn4_rest.shp")
-save_ahn4_ahn3_without_new_and_lost("outputs/facets/ahn3_rest.shp", "outputs/facets/ahn4_rest.shp", "inputs/pointcloud/AHN3_buildings_clip.laz",
+save_ahn4_ahn3_pc_without_new_and_lost("outputs/facets/ahn3_rest.shp", "outputs/facets/ahn4_rest.shp", "inputs/pointcloud/AHN3_buildings_clip.laz",
                                     "inputs/pointcloud/AHN4_buildings_clip.laz", "outputs/pointcloud/ahn3_no_new_no_lost.laz", "outputs/pointcloud/ahn4_no_new_no_lost.laz")
 
