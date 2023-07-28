@@ -3,50 +3,110 @@ import shapely
 import laspy
 
 
-def save_intersecting_polygons(ahn4, ahn3,  new, lost, ahn3_rest, ahn4_rest):
+def save_intersecting_polygons(ahn4_shp, ahn3_shp, ahn4_pc, ahn3_pc, ahn3_tempo, ahn4_tempo,  new, lost, ahn3_rest, ahn4_rest):
 
     # reading the shapefiles
-    shapefile1 = gpd.read_file(ahn4)
-    shapefile2 = gpd.read_file(ahn3)
+    shapefile1 = gpd.read_file(ahn4_shp)
+    shapefile2 = gpd.read_file(ahn3_shp)
     # setting the crs
     shapefile1.crs = "EPSG:28992"
     shapefile2.crs = "EPSG:28992"
 
+    # read the pointclouds using laspy
+    las_file1 = laspy.read(ahn3_pc)
+    las_file2 = laspy.read(ahn4_pc)
+
+    # create a GeoDataFrame from the x,y coordinates of the point clouds
+    points_ahn3 = gpd.GeoDataFrame(geometry=gpd.points_from_xy(
+        las_file1.x, las_file1.y), crs="EPSG:28992")
+    points_ahn4 = gpd.GeoDataFrame(geometry=gpd.points_from_xy(
+        las_file2.x, las_file2.y), crs="EPSG:28992")
+
     # creating empty lists temporary , new and lost polygons
     temp_polygons = []
+    ahn3_temp = []
+    ahn4_temp = []
     temp_polygons1 = []
     new_polygons = []
     lost_polygons = []
     rest_ahn3_polygons = []
     rest_ahn4_polygons = []
 
-    # adding polygons from AHN4 that intersect with AHN3 to a temporary list (temp_polygons)
+    # creating a spatial index for the ahn3 and ahn4 point clouds
+    points_ahn3_sindex = points_ahn3.sindex
+    points_ahn4_sindex = points_ahn4.sindex
+
+    # Define a buffer distance to select nearby points
+    buffer_distance = 1
+
+    # creating a new list with the polygons from AHN3 that with at least a point from AHN3 point cloud
+
+    for polygon in shapefile2.geometry:
+        # Create a buffer around the polygon to find nearby points efficiently.
+        polygon_buffered_ahn3 = polygon.buffer(buffer_distance)
+    # Use the spatial index to find candidate points within the buffer.
+        candidate_points_idx_ahn3 = list(
+            points_ahn3_sindex.intersection(polygon_buffered_ahn3.bounds))
+    # Check for actual intersection for each candidate point.
+        for idx in candidate_points_idx_ahn3:
+            point = points_ahn3.geometry.iloc[idx]
+            if point.intersects(polygon):
+                ahn3_temp.append(polygon)
+                # Stop checking once an intersection is found for the polygon.
+                break
+
+    # creating a new list with the polygons from AHN4 that with at least a point from AHN4 point cloud
     for poly in shapefile1.geometry:
-        for poly1 in shapefile2.geometry:
+        # Create a buffer around the polygon to find nearby points efficiently.
+        polygon_buffered_ahn4 = poly.buffer(buffer_distance)
+        # Use the spatial index to find candidate points within the buffer.
+        candidate_points_idx_ahn4 = list(
+            points_ahn4_sindex.intersection(polygon_buffered_ahn4.bounds))
+        # Check for actual intersection for each candidate point.
+        for idx in candidate_points_idx_ahn4:
+            point = points_ahn4.geometry.iloc[idx]
+            if point.intersects(poly):
+                ahn4_temp.append(poly)
+                # Stop checking once an intersection is found for the polygon.
+                break
+
+    # adding polygons from AHN4 that intersect with AHN3 to a temporary list (temp_polygons)
+    for poly in ahn4_temp:
+        for poly1 in ahn3_temp:
             if shapely.intersects(poly, poly1):
                 temp_polygons.append(poly)
 
     # adding polygons from AHN3 that intersect with AHN4 to a temporary list (temp_polygons1)
-    for poly in shapefile1.geometry:
-        for poly1 in shapefile2.geometry:
+    for poly in ahn3_temp:
+        for poly1 in ahn4_temp:
             if shapely.intersects(poly, poly1):
-                temp_polygons1.append(poly1)
+                temp_polygons1.append(poly)
 
     # adding polygons from AHN4 that do not intersect with AHN3 to a new list (new_polygons)
-    for poly in shapefile1.geometry:
+    for poly in ahn4_temp:
         if poly not in temp_polygons:
             new_polygons.append(poly)
         else:
             rest_ahn4_polygons.append(poly)
 
     # adding polygons from AHN3 that do not intersect with AHN4 to a new list (lost_polygons)
-    for poly in shapefile2.geometry:
+    for poly in ahn3_temp:
         if poly not in temp_polygons1:
             lost_polygons.append(poly)
         else:
             rest_ahn3_polygons.append(poly)
 
     # converting the lists to geodataframes and joining them with the original shapefiles to add the attributes
+
+    ahn3_temp = gpd.GeoDataFrame(geometry=ahn3_temp, crs="EPSG:28992")
+    ahn4_temp = gpd.GeoDataFrame(geometry=ahn4_temp, crs="EPSG:28992")
+    ahn3_temp = gpd.sjoin(ahn3_temp, shapefile2,
+                          how="inner", predicate="within")
+    ahn4_temp = gpd.sjoin(ahn4_temp, shapefile1,
+                          how="inner", predicate="within")
+    ahn3_temp = ahn3_temp.drop(columns=["index_right"])
+    ahn4_temp = ahn4_temp.drop(columns=["index_right"])
+
     new_polygons = gpd.GeoDataFrame(
         geometry=new_polygons, crs="EPSG:28992")
     new_polygons = gpd.sjoin(
@@ -70,7 +130,7 @@ def save_intersecting_polygons(ahn4, ahn3,  new, lost, ahn3_rest, ahn4_rest):
         rest_ahn4_polygons, shapefile1, how="inner", predicate="within")
     rest_ahn4_polygons = rest_ahn4_polygons.drop(columns=["index_right"])
 
-    return new_polygons.to_file(new), lost_polygons.to_file(lost), rest_ahn3_polygons.to_file(ahn3_rest), rest_ahn4_polygons.to_file(ahn4_rest)
+    return new_polygons.to_file(new), lost_polygons.to_file(lost), rest_ahn3_polygons.to_file(ahn3_rest), rest_ahn4_polygons.to_file(ahn4_rest), ahn3_temp.to_file(ahn3_tempo), ahn4_temp.to_file(ahn4_tempo)
 
 
 def save_ahn4_ahn3_without_new_and_lost(ahn3_rest, ahn4_rest, ahn3_pc, ahn4_pc, ahn3_filtered, ahn4_filtered):
@@ -136,7 +196,7 @@ def save_ahn4_ahn3_without_new_and_lost(ahn3_rest, ahn4_rest, ahn3_pc, ahn4_pc, 
     return ahn3_changed.write(ahn3_filtered), ahn4_changed.write(ahn4_filtered)
 
 
-save_intersecting_polygons("inputs/footprints/ahn4.shp", "inputs/footprints/model.shp",
+save_intersecting_polygons("inputs/footprints/ahn4.shp", "inputs/footprints/model.shp", "inputs/pointcloud/AHN4_buildings_clip.laz", "inputs/pointcloud/AHN3_buildings_clip.laz", "outputs/facets/ahn3_temp.shp", "outputs/facets/ahn4_temp.shp",
                            "outputs/facets/new.shp", "outputs/facets/lost.shp", "outputs/facets/ahn3_rest.shp", "outputs/facets/ahn4_rest.shp")
 save_ahn4_ahn3_without_new_and_lost("outputs/facets/ahn3_rest.shp", "outputs/facets/ahn4_rest.shp", "inputs/pointcloud/AHN3_buildings_clip.laz",
                                     "inputs/pointcloud/AHN4_buildings_clip.laz", "outputs/pointcloud/ahn3_no_new_no_lost.laz", "outputs/pointcloud/ahn4_no_new_no_lost.laz")
