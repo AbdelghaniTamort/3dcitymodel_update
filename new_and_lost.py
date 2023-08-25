@@ -2,11 +2,10 @@ import geopandas as gpd
 import shapely
 import laspy
 
-
-import geopandas as gpd
-import shapely
-import laspy
-
+''' The following functions objectives are : 
+    - save_intersecting_polygons: output the new and lost building footprints, and the rest of the footprints of each epoch
+    - save_ahn4_ahn3_without_new_and_lost: create two new pointclouds containing the points encompassed within the rest of the footprints of each epoch
+    - save_new_lost_pc: create two new pointclouds containing the points encompassed within the rest of the footprints of each epoch '''
 
 def save_intersecting_polygons(ahn4_shp, ahn3_shp, ahn4_pc, ahn3_pc, ahn3_tempo, ahn4_tempo,  new, lost, ahn3_rest, ahn4_rest):
 
@@ -27,7 +26,7 @@ def save_intersecting_polygons(ahn4_shp, ahn3_shp, ahn4_pc, ahn3_pc, ahn3_tempo,
     points_ahn4 = gpd.GeoDataFrame(geometry=gpd.points_from_xy(
         las_file2.x, las_file2.y), crs="EPSG:28992")
 
-    # creating empty lists temporary , new and lost polygons
+    # creating empty temporary and permanent lists
     temp_polygons = []
     ahn3_temp = []
     ahn4_temp = []
@@ -41,10 +40,11 @@ def save_intersecting_polygons(ahn4_shp, ahn3_shp, ahn4_pc, ahn3_pc, ahn3_tempo,
     points_ahn3_sindex = points_ahn3.sindex
     points_ahn4_sindex = points_ahn4.sindex
 
+    # fixing the number of points required for the intersection with each polygon
     required_intersection_count = 50
     required_intersection_count2= 20
 
-    # creating a new list with the polygons from AHN3 that intersect with at least 50 points from AHN3 point cloud
+    # creating a new list with the polygons from AHN3 that intersect with at least 20 points from AHN3 point cloud
     for polygon in shapefile2.geometry:
         # Use the spatial index to find candidate points 
         candidate_points_idx_ahn3 = list(
