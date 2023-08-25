@@ -3,6 +3,11 @@ import shapely
 import laspy
 
 
+import geopandas as gpd
+import shapely
+import laspy
+
+
 def save_intersecting_polygons(ahn4_shp, ahn3_shp, ahn4_pc, ahn3_pc, ahn3_tempo, ahn4_tempo,  new, lost, ahn3_rest, ahn4_rest):
 
     # reading the shapefiles
@@ -36,51 +41,40 @@ def save_intersecting_polygons(ahn4_shp, ahn3_shp, ahn4_pc, ahn3_pc, ahn3_tempo,
     points_ahn3_sindex = points_ahn3.sindex
     points_ahn4_sindex = points_ahn4.sindex
 
-    # Define a buffer distance to select nearby points
-    buffer_distance = 1
+    required_intersection_count = 50
+    required_intersection_count2= 20
 
-    # creating a new list with the polygons from AHN3 that with at least a point from AHN3 point cloud
-
+    # creating a new list with the polygons from AHN3 that intersect with at least 50 points from AHN3 point cloud
     for polygon in shapefile2.geometry:
-        # Create a buffer around the polygon to find nearby points efficiently.
-        polygon_buffered_ahn3 = polygon.buffer(buffer_distance)
-    # Use the spatial index to find candidate points within the buffer.
+        # Use the spatial index to find candidate points 
         candidate_points_idx_ahn3 = list(
-            points_ahn3_sindex.intersection(polygon_buffered_ahn3.bounds))
-    # Check for actual intersection for each candidate point.
-        for idx in candidate_points_idx_ahn3:
-            point = points_ahn3.geometry.iloc[idx]
-            if point.intersects(polygon):
-                ahn3_temp.append(polygon)
-                # Stop checking once an intersection is found for the polygon.
-                break
+            points_ahn3_sindex.intersection(polygon.bounds))
+        if len(candidate_points_idx_ahn3) > required_intersection_count2:
+            ahn3_temp.append(polygon)
 
-    # creating a new list with the polygons from AHN4 that with at least a point from AHN4 point cloud
+    # creating a new list with the polygons from AHN4 that with at least 50 points from AHN4 point cloud
     for poly in shapefile1.geometry:
-        # Create a buffer around the polygon to find nearby points efficiently.
-        polygon_buffered_ahn4 = poly.buffer(buffer_distance)
         # Use the spatial index to find candidate points within the buffer.
         candidate_points_idx_ahn4 = list(
-            points_ahn4_sindex.intersection(polygon_buffered_ahn4.bounds))
-        # Check for actual intersection for each candidate point.
-        for idx in candidate_points_idx_ahn4:
-            point = points_ahn4.geometry.iloc[idx]
-            if point.intersects(poly):
-                ahn4_temp.append(poly)
-                # Stop checking once an intersection is found for the polygon.
-                break
-
+            points_ahn4_sindex.intersection(poly.bounds))
+        if len(candidate_points_idx_ahn4) > required_intersection_count:
+            ahn4_temp.append(poly)
+                
     # adding polygons from AHN4 that intersect with AHN3 to a temporary list (temp_polygons)
     for poly in ahn4_temp:
         for poly1 in ahn3_temp:
             if shapely.intersects(poly, poly1):
-                temp_polygons.append(poly)
+                # if intersection area is greater than the 25% of the area of the polygon from AHN4
+                if poly.intersection(poly1).area > 0.25*poly.area:
+                    temp_polygons.append(poly)
 
     # adding polygons from AHN3 that intersect with AHN4 to a temporary list (temp_polygons1)
     for poly in ahn3_temp:
         for poly1 in ahn4_temp:
             if shapely.intersects(poly, poly1):
-                temp_polygons1.append(poly)
+                # if intersection area is greater than the 25% of the area of the polygon from AHN3
+                if poly.intersection(poly1).area > 0.25*poly.area:
+                    temp_polygons1.append(poly)
 
     # adding polygons from AHN4 that do not intersect with AHN3 to a new list (new_polygons)
     for poly in ahn4_temp:
@@ -97,7 +91,6 @@ def save_intersecting_polygons(ahn4_shp, ahn3_shp, ahn4_pc, ahn3_pc, ahn3_tempo,
             rest_ahn3_polygons.append(poly)
 
     # converting the lists to geodataframes and joining them with the original shapefiles to add the attributes
-
     ahn3_temp = gpd.GeoDataFrame(geometry=ahn3_temp, crs="EPSG:28992")
     ahn4_temp = gpd.GeoDataFrame(geometry=ahn4_temp, crs="EPSG:28992")
     ahn3_temp = gpd.sjoin(ahn3_temp, shapefile2,
@@ -133,7 +126,7 @@ def save_intersecting_polygons(ahn4_shp, ahn3_shp, ahn4_pc, ahn3_pc, ahn3_tempo,
     return new_polygons.to_file(new), lost_polygons.to_file(lost), rest_ahn3_polygons.to_file(ahn3_rest), rest_ahn4_polygons.to_file(ahn4_rest), ahn3_temp.to_file(ahn3_tempo), ahn4_temp.to_file(ahn4_tempo)
 
 
-def save_ahn4_ahn3_pc_without_new_and_lost(ahn3_rest, ahn4_rest, ahn3_pc, ahn4_pc, ahn3_filtered, ahn4_filtered):
+def save_ahn4_ahn3_without_new_and_lost(ahn3_rest, ahn4_rest, ahn3_pc, ahn4_pc, ahn3_filtered, ahn4_filtered):
 
     # reading the shapefiles
     shapefile1 = gpd.read_file(ahn3_rest)
@@ -256,13 +249,3 @@ def save_new_lost_pc(new_shp, lost_shp, ahn3_pc, ahn4_pc, new_pc, lost_pc):
     lost.blue = las_file1.blue[clipped_points_lost.index]
 
     return new.write(new_pc), lost.write(lost_pc)
-
-
-# applying the functions 
-save_intersecting_polygons("inputs/footprints/ahn4.shp", "inputs/footprints/model.shp", "inputs/pointcloud/AHN4_buildings_clip.laz", "inputs/pointcloud/AHN3_buildings_clip.laz", "outputs/facets/ahn3_temp.shp", "outputs/facets/ahn4_temp.shp",
-                           "outputs/facets/new.shp", "outputs/facets/lost.shp", "outputs/facets/ahn3_rest.shp", "outputs/facets/ahn4_rest.shp")
-save_ahn4_ahn3_pc_without_new_and_lost("outputs/facets/ahn3_rest.shp", "outputs/facets/ahn4_rest.shp", "inputs/pointcloud/AHN3_buildings_clip.laz",
-                                    "inputs/pointcloud/AHN4_buildings_clip.laz", "outputs/pointcloud/ahn3_no_new_no_lost.laz", "outputs/pointcloud/ahn4_no_new_no_lost.laz")
-save_new_lost_pc("outputs/facets/new.shp", "outputs/facets/lost.shp", "inputs/pointcloud/AHN3_buildings_clip.laz",
-                 "inputs/pointcloud/AHN4_buildings_clip.laz", "outputs/pointcloud/new.laz", "outputs/pointcloud/lost.laz")
-
